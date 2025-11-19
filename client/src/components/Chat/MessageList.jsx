@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Paper, Typography, Avatar, Chip, IconButton, Tooltip, Popover, TextField, Button, Link } from '@mui/material';
-import { Reply as ReplyIcon, Delete as DeleteIcon, Edit as EditIcon, EmojiEmotions as EmojiIcon, InsertDriveFile as FileIcon, Forward as ForwardIcon } from '@mui/icons-material';
+import { Reply as ReplyIcon, Delete as DeleteIcon, Edit as EditIcon, EmojiEmotions as EmojiIcon, InsertDriveFile as FileIcon, Forward as ForwardIcon, DoneAll as DoneAllIcon, Done as DoneIcon } from '@mui/icons-material';
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 
 const MessageList = ({ messages, currentUserId, messagesEndRef, onReply, onUnsend, onEdit, onReact, onForward }) => {
@@ -988,19 +988,57 @@ const MessageList = ({ messages, currentUserId, messagesEndRef, onReply, onUnsen
                       </Box>
                     )}
                     {showTimestamp && (
-                      <Typography
-                        variant="caption"
-                        sx={{ 
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
                           mt: 0.25,
                           px: 0.75,
-                          fontSize: '0.6875rem',
-                          color: '#8a8d91',
-                          fontWeight: 400,
                           alignSelf: isOwn ? 'flex-end' : 'flex-start',
                         }}
                       >
-                        {formatMessageTime(message.createdAt)}
-                      </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{ 
+                            fontSize: '0.6875rem',
+                            color: '#8a8d91',
+                            fontWeight: 400,
+                          }}
+                        >
+                          {formatMessageTime(message.createdAt)}
+                        </Typography>
+                        {isOwn && !message.isSystem && (
+                          <Tooltip 
+                            title={
+                              message.readBy && message.readBy.length > 1 
+                                ? `Read by ${message.readBy.length - 1} ${message.readBy.length === 2 ? 'person' : 'people'}`
+                                : message.readBy && message.readBy.length === 1
+                                ? 'Delivered'
+                                : 'Sent'
+                            }
+                            placement="top"
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {message.readBy && message.readBy.length > 1 ? (
+                                <DoneAllIcon 
+                                  sx={{ 
+                                    fontSize: '0.875rem', 
+                                    color: '#0084ff',
+                                  }} 
+                                />
+                              ) : (
+                                <DoneIcon 
+                                  sx={{ 
+                                    fontSize: '0.875rem', 
+                                    color: '#8a8d91',
+                                  }} 
+                                />
+                              )}
+                            </Box>
+                          </Tooltip>
+                        )}
+                      </Box>
                     )}
                   </Box>
                 </Box>

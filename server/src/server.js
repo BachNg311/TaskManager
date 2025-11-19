@@ -6,6 +6,7 @@ const connectRedis = require('./config/redis');
 const socketHandler = require('./sockets');
 const { setIOInstance: setChatIOInstance } = require('./controllers/chat');
 const { setIOInstance: setTaskIOInstance } = require('./controllers/task');
+const { setIOInstance: setAiIOInstance } = require('./controllers/ai');
 
 const PORT = process.env.PORT || 5000;
 
@@ -37,6 +38,7 @@ const io = new Server(server, {
 // Set io instance for controllers to use
 setChatIOInstance(io);
 setTaskIOInstance(io);
+setAiIOInstance(io);
 
 // Initialize Socket.IO handler
 socketHandler(io);

@@ -210,9 +210,17 @@ const socketHandler = (io) => {
         // Ensure sender is in the chat room before emitting
         socket.join(`chat:${chatId}`);
         
-        // Emit to all participants in the chat (including sender)
-        // No need to emit directly to sender since they're already in the room
+        // Emit to chat room (covers users who have already joined)
         io.to(`chat:${chatId}`).emit('message:new', messageObj);
+        
+        // Also emit directly to each participant's user room so they receive
+        // the message even if they haven't joined the chat room yet
+        chat.participants.forEach((participantId) => {
+          const participantIdStr = extractUserId(participantId);
+          if (participantIdStr) {
+            io.to(`user:${participantIdStr}`).emit('message:new', messageObj);
+          }
+        });
         
         // If chat was restored for any participants, notify them
         if (restoredParticipants.length > 0) {

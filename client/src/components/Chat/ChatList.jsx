@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   List,
   ListItem,
@@ -20,6 +20,16 @@ import { MoreVert as MoreVertIcon, Delete as DeleteIcon, Logout as LogoutIcon } 
 const ChatList = ({ chats, selectedChat, onSelectChat, getChatName, getChatAvatar, onDeleteChat, onLeaveChat }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedChatForMenu, setSelectedChatForMenu] = useState(null);
+  const [, setTick] = useState(0);
+
+  // Force re-render every 30 seconds to update "X minutes ago" timestamps
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(prev => prev + 1);
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
   const getLastMessagePreview = (chat) => {
     if (chat.lastMessage) {
       const text = chat.lastMessage.text?.trim();

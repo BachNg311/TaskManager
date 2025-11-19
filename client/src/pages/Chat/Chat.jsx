@@ -1,6 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Paper, Typography, TextField, IconButton, Avatar, Chip, Fab, CircularProgress } from '@mui/material';
-import { Send as SendIcon, AttachFile as AttachFileIcon, Add as AddIcon, Close as CloseIcon, InsertDriveFile as FileIcon, Group as GroupIcon, Edit as EditIcon } from '@mui/icons-material';
+import {
+  Box,
+  Paper,
+  Typography,
+  TextField,
+  IconButton,
+  Avatar,
+  Chip,
+  Fab,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Stack,
+  Alert,
+  Tooltip,
+} from '@mui/material';
+import {
+  Send as SendIcon,
+  AttachFile as AttachFileIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
+  InsertDriveFile as FileIcon,
+  Group as GroupIcon,
+  Edit as EditIcon,
+  Summarize as SummarizeIcon,
+} from '@mui/icons-material';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../hooks/useAuth';
 import { chatService } from '../../services/chatService';
@@ -32,9 +59,14 @@ const Chat = () => {
   const [mentionUsers, setMentionUsers] = useState([]);
   const [mentionIndex, setMentionIndex] = useState(-1);
   const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [summaryDialogOpen, setSummaryDialogOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [chatSummary, setChatSummary] = useState(null);
+  const [summaryError, setSummaryError] = useState('');
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const restoredChatsRef = useRef(new Set());
+  const joinedChatsRef = useRef(new Set());
   const messageInputRef = useRef(null);
   const attachmentInputRef = useRef(null);
   // Track processed message IDs to prevent duplicates even in race conditions
@@ -51,6 +83,64 @@ const Chat = () => {
       if (typeof value.toString === 'function') return value.toString();
     }
     return String(value);
+  };
+
+  const sortChatsByRecent = (list = []) => {
+    return [...list].sort((a, b) => {
+      const dateA = new Date(a?.lastMessageAt || a?.createdAt || 0);
+      const dateB = new Date(b?.lastMessageAt || b?.createdAt || 0);
+      return dateB - dateA;
+    });
+  };
+
+  const updateChatPreviewFromMessage = (chatId, latestMessage) => {
+    if (!chatId || !latestMessage) return;
+
+    const latestCreatedAt = latestMessage.createdAt || new Date().toISOString();
+    const latestTimestamp = new Date(latestCreatedAt).getTime();
+    const latestMessageId = latestMessage._id?.toString() || latestMessage._id;
+
+    setChats((prevChats) => {
+      let didUpdate = false;
+      const updatedChats = prevChats.map((chat) => {
+        const chatIdStr = getIdString(chat._id);
+        if (chatIdStr !== chatId) return chat;
+
+        const currentLastAt = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : null;
+        const currentLastId = chat.lastMessage?._id?.toString() || chat.lastMessage?._id;
+
+        didUpdate = true;
+        return {
+          ...chat,
+          lastMessage: latestMessage,
+          lastMessageAt: latestCreatedAt
+        };
+      });
+
+      return didUpdate ? sortChatsByRecent(updatedChats) : prevChats;
+    });
+
+    setSelectedChat((prevSelected) => {
+      if (!prevSelected) return prevSelected;
+      const prevId = getIdString(prevSelected._id);
+      if (prevId !== chatId) return prevSelected;
+
+      const currentLastAt = prevSelected.lastMessageAt ? new Date(prevSelected.lastMessageAt).getTime() : null;
+      const currentLastId = prevSelected.lastMessage?._id?.toString() || prevSelected.lastMessage?._id;
+
+      const isNewer = currentLastAt === null || latestTimestamp > currentLastAt;
+      const isDifferentMessage = latestMessageId && latestMessageId !== currentLastId;
+
+      if (!isNewer && !isDifferentMessage) {
+        return prevSelected;
+      }
+
+      return {
+        ...prevSelected,
+        lastMessage: latestMessage,
+        lastMessageAt: latestCreatedAt
+      };
+    });
   };
 
   const enhanceChat = (chat, overrides = {}) => {
@@ -76,6 +166,13 @@ const Chat = () => {
     };
   };
 
+  const getSentimentColor = (sentiment = 'neutral') => {
+    const value = (sentiment || '').toLowerCase();
+    if (value === 'positive') return 'success';
+    if (value === 'negative') return 'error';
+    return 'default';
+  };
+
   const markChatLeftState = (chatId, hasLeftValue) => {
     setChats((prev) =>
       prev.map((chat) =>
@@ -98,9 +195,10 @@ const Chat = () => {
       try {
         const data = await chatService.getChats();
         const enhanced = Array.isArray(data) ? data.map((chat) => enhanceChat(chat)) : [];
-        setChats(enhanced);
-        if (enhanced.length > 0 && !selectedChat) {
-          setSelectedChat(enhanceChat(enhanced[0]));
+        const sortedChats = sortChatsByRecent(enhanced);
+        setChats(sortedChats);
+        if (sortedChats.length > 0 && !selectedChat) {
+          setSelectedChat(enhanceChat(sortedChats[0]));
         }
       } catch (error) {
         console.error('Error fetching chats:', error);
@@ -128,8 +226,11 @@ const Chat = () => {
       
       const fetchMessages = async () => {
         try {
+          console.log('📨 Fetching messages for chat:', chatId);
           const response = await chatService.getMessages(selectedChat._id);
           const fetchedMessages = response.data || response || [];
+          console.log('📨 Fetched messages count:', fetchedMessages.length);
+          
           // Backend returns messages in ascending order (oldest first), so we keep that order
           // Sort to ensure proper order (oldest first)
           const sortedMessages = [...fetchedMessages].sort((a, b) => {
@@ -146,6 +247,8 @@ const Chat = () => {
             }
           });
           
+          const latestFetchedMessage = sortedMessages[sortedMessages.length - 1] || null;
+          
           // Preserve optimistic messages when fetching
           setMessages((prev) => {
             const optimisticMessages = prev.filter(msg => {
@@ -156,12 +259,25 @@ const Chat = () => {
             });
             // Combine and sort again to maintain order
             const combined = [...sortedMessages, ...optimisticMessages];
-            return combined.sort((a, b) => {
+            const finalMessages = combined.sort((a, b) => {
               const dateA = new Date(a.createdAt || 0);
               const dateB = new Date(b.createdAt || 0);
               return dateA - dateB;
             });
+            
+            console.log('📨 Setting messages:', {
+              fetched: sortedMessages.length,
+              optimistic: optimisticMessages.length,
+              total: finalMessages.length,
+              lastMessage: finalMessages[finalMessages.length - 1]?.text?.substring(0, 30)
+            });
+            
+            return finalMessages;
           });
+
+          if (latestFetchedMessage) {
+            updateChatPreviewFromMessage(chatId, latestFetchedMessage);
+          }
         } catch (error) {
           console.error('Error fetching messages:', error);
         }
@@ -192,6 +308,46 @@ const Chat = () => {
       setMentionUsers([]);
     }
   }, [selectedChat, socket, connected, user._id]);
+
+  // Join all chats to receive message events even when not actively viewing them
+  useEffect(() => {
+    if (!socket || !connected) return;
+
+    const currentChatIds = new Set(
+      chats
+        .map(chat => chat?._id?.toString() || chat?._id)
+        .filter(Boolean)
+    );
+
+    // Join newly added chats
+    currentChatIds.forEach((chatId) => {
+      if (!joinedChatsRef.current.has(chatId)) {
+        socket.emit('join:chat', chatId);
+        joinedChatsRef.current.add(chatId);
+        console.log(`🔗 Joined chat room via auto-join: ${chatId}`);
+      }
+    });
+
+    // Leave chats that were removed from the list
+    joinedChatsRef.current.forEach((chatId) => {
+      if (!currentChatIds.has(chatId)) {
+        socket.emit('leave:chat', chatId);
+        joinedChatsRef.current.delete(chatId);
+        console.log(`🚪 Left chat room (chat removed): ${chatId}`);
+      }
+    });
+  }, [socket, connected, chats]);
+
+  // Cleanup all joined chats on unmount / socket change
+  useEffect(() => {
+    return () => {
+      if (!socket) return;
+      joinedChatsRef.current.forEach((chatId) => {
+        socket.emit('leave:chat', chatId);
+      });
+      joinedChatsRef.current.clear();
+    };
+  }, [socket]);
 
   // Socket event listeners
   useEffect(() => {
@@ -311,25 +467,35 @@ const Chat = () => {
           });
         });
         scrollToBottom();
-      } else {
-        console.log('ℹ️ Message is for different chat, updating chat list only');
       }
-      
-      // Update chat list with new message and move to top
+
+      // Update chat list preview (handles sorting and selectedChat update)
+      updateChatPreviewFromMessage(chatId, message);
+
+      // Handle case where chat is not in the list yet
       setChats((prev) => {
-        const updatedChats = prev.map((chat) => {
-          const chatIdStr = chat._id?.toString() || chat._id;
-          return chatIdStr === chatId
-            ? { ...chat, lastMessage: message, lastMessageAt: message.createdAt }
-            : chat;
-        });
-        
-        // Sort by lastMessageAt (most recent first)
-        return updatedChats.sort((a, b) => {
-          const dateA = new Date(a.lastMessageAt || a.createdAt || 0);
-          const dateB = new Date(b.lastMessageAt || b.createdAt || 0);
-          return dateB - dateA; // Descending order (newest first)
-        });
+        const exists = prev.some(chat => getIdString(chat._id) === chatId);
+        if (!exists) {
+          console.log('📥 Chat not in list, fetching chat details:', chatId);
+          chatService.getChat(chatId)
+            .then(chatData => {
+              const chat = chatData.data || chatData;
+              const enhanced = enhanceChat(chat, { hasLeft: false });
+              // Manually set the last message on the fetched chat so it appears correct immediately
+              enhanced.lastMessage = message;
+              enhanced.lastMessageAt = message.createdAt;
+              
+              setChats(prevChats => {
+                const stillMissing = !prevChats.some(c => getIdString(c._id) === chatId);
+                if (stillMissing) {
+                  return sortChatsByRecent([enhanced, ...prevChats]);
+                }
+                return prevChats;
+              });
+            })
+            .catch(err => console.error('❌ Failed to fetch chat:', err));
+        }
+        return prev;
       });
     };
 
@@ -629,10 +795,57 @@ const Chat = () => {
       }
     };
 
+    const handleMessagesRead = (data) => {
+      const { chatId, messageIds, readBy, readAt } = data;
+      
+      console.log('📖 Messages read event:', { chatId, messageIds, readBy, readAt });
+      
+      // Update messages in the current chat
+      if (selectedChat && selectedChat._id === chatId) {
+        setMessages(prevMessages => 
+          prevMessages.map(msg => {
+            if (messageIds.includes(msg._id.toString())) {
+              // Add the new reader to readBy array if not already there
+              const existingReadBy = msg.readBy || [];
+              const alreadyRead = existingReadBy.some(r => r.user === readBy);
+              
+              if (!alreadyRead) {
+                return {
+                  ...msg,
+                  readBy: [...existingReadBy, { user: readBy, readAt: new Date(readAt) }]
+                };
+              }
+            }
+            return msg;
+          })
+        );
+      }
+
+      // Update the last message in chat list if it was read
+      setChats(prevChats =>
+        prevChats.map(chat => {
+          if (chat._id === chatId && chat.lastMessage && messageIds.includes(chat.lastMessage._id?.toString())) {
+            return {
+              ...chat,
+              lastMessage: {
+                ...chat.lastMessage,
+                readBy: [
+                  ...(chat.lastMessage.readBy || []),
+                  { user: readBy, readAt: new Date(readAt) }
+                ]
+              }
+            };
+          }
+          return chat;
+        })
+      );
+    };
+
     socket.on('message:new', handleNewMessage);
     socket.on('message:edited', handleMessageEdited);
     socket.on('message:deleted', handleMessageDeleted);
     socket.on('message:reacted', handleMessageReacted);
+    socket.on('messages:read', handleMessagesRead);
     socket.on('user:typing', handleTyping);
     socket.on('user:stopped-typing', handleStoppedTyping);
     socket.on('message:error', handleMessageError);
@@ -648,6 +861,7 @@ const Chat = () => {
       socket.off('message:edited', handleMessageEdited);
       socket.off('message:deleted', handleMessageDeleted);
       socket.off('message:reacted', handleMessageReacted);
+      socket.off('messages:read', handleMessagesRead);
       socket.off('user:typing', handleTyping);
       socket.off('user:stopped-typing', handleStoppedTyping);
       socket.off('message:error', handleMessageError);
@@ -659,6 +873,17 @@ const Chat = () => {
       socket.off('chat:removed', handleChatRemoved);
     };
   }, [socket, connected, selectedChat, user]);
+
+  // Debug: Log when chats change
+  useEffect(() => {
+    console.log('🔄 Chats state updated:', {
+      count: chats.length,
+      topChatId: chats[0]?._id,
+      topChatType: chats[0]?.type,
+      lastMessage: chats[0]?.lastMessage?.text?.substring(0, 30),
+      lastMessageAt: chats[0]?.lastMessageAt
+    });
+  }, [chats]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -1361,6 +1586,41 @@ const Chat = () => {
     }
   };
 
+  const requestChatSummary = async ({ openDialog = false } = {}) => {
+    if (!selectedChat?._id) {
+      return;
+    }
+    if (openDialog) {
+      setSummaryDialogOpen(true);
+      setChatSummary(null);
+    }
+    setSummaryLoading(true);
+    setSummaryError('');
+    try {
+      const response = await chatService.summarizeChat(selectedChat._id);
+      const payload = response?.data || response;
+      const summaryData = payload?.data || payload;
+      setChatSummary(summaryData);
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to summarize chat.';
+      setSummaryError(message);
+      setChatSummary(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const handleOpenSummary = () => {
+    requestChatSummary({ openDialog: true });
+  };
+
+  const handleRefreshSummary = () => {
+    requestChatSummary({ openDialog: false });
+  };
+
   return (
     <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden', borderRadius: 3 }}>
       {/* Chat List Sidebar */}
@@ -1480,6 +1740,26 @@ const Chat = () => {
               >
                 <EditIcon />
               </IconButton>
+              <Tooltip title="Summarize conversation">
+                <span>
+                  <IconButton
+                    onClick={handleOpenSummary}
+                    disabled={summaryLoading}
+                    sx={{
+                      color: '#65676b',
+                      '&:hover': {
+                        bgcolor: '#f2f3f5',
+                      },
+                    }}
+                  >
+                    {summaryLoading && summaryDialogOpen ? (
+                      <CircularProgress size={18} />
+                    ) : (
+                      <SummarizeIcon />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
               {selectedChat.type === 'group' && (
                 <>
                   <IconButton
@@ -1928,6 +2208,118 @@ const Chat = () => {
         currentUserId={user._id}
         onForward={handleForward}
       />
+
+      <Dialog
+        open={summaryDialogOpen}
+        onClose={() => {
+          setSummaryDialogOpen(false);
+          setSummaryError('');
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Chat Summary</DialogTitle>
+        <DialogContent dividers>
+          {summaryLoading && (
+            <Box sx={{ py: 4, textAlign: 'center' }}>
+              <CircularProgress />
+              <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+                Summarizing the latest conversation...
+              </Typography>
+            </Box>
+          )}
+
+          {!summaryLoading && summaryError && (
+            <Alert severity="error" sx={{ mb: chatSummary ? 2 : 0 }}>
+              {summaryError}
+            </Alert>
+          )}
+
+          {!summaryLoading && chatSummary && (
+            <Stack spacing={2}>
+              <Typography variant="body1">{chatSummary.summary}</Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Chip
+                  size="small"
+                  color={getSentimentColor(chatSummary.sentiment)}
+                  label={`Sentiment: ${chatSummary.sentiment || 'neutral'}`}
+                />
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`${chatSummary.totalMessages || 0} message${
+                    (chatSummary.totalMessages || 0) === 1 ? '' : 's'
+                  } analyzed`}
+                />
+                {chatSummary.timeframe?.start && chatSummary.timeframe?.end && (
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`Range: ${new Date(chatSummary.timeframe.start).toLocaleString()} → ${new Date(
+                      chatSummary.timeframe.end
+                    ).toLocaleString()}`}
+                  />
+                )}
+              </Stack>
+
+              {Array.isArray(chatSummary.highlights) && chatSummary.highlights.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Highlights
+                  </Typography>
+                  <Box component="ul" sx={{ pl: 3, m: 0 }}>
+                    {chatSummary.highlights.map((item, index) => (
+                      <Typography key={`highlight-${index}`} component="li" variant="body2">
+                        {item}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {Array.isArray(chatSummary.actionItems) && chatSummary.actionItems.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Action Items
+                  </Typography>
+                  <Box component="ul" sx={{ pl: 3, m: 0 }}>
+                    {chatSummary.actionItems.map((item, index) => (
+                      <Typography key={`action-${index}`} component="li" variant="body2">
+                        {item}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {Array.isArray(chatSummary.followUpQuestions) && chatSummary.followUpQuestions.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    Follow-up Questions
+                  </Typography>
+                  <Box component="ul" sx={{ pl: 3, m: 0 }}>
+                    {chatSummary.followUpQuestions.map((item, index) => (
+                      <Typography key={`question-${index}`} component="li" variant="body2">
+                        {item}
+                      </Typography>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={handleRefreshSummary}
+            startIcon={<SummarizeIcon />}
+            disabled={summaryLoading || !selectedChat}
+          >
+            Refresh
+          </Button>
+          <Button onClick={() => setSummaryDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -75,5 +75,13 @@ export const chatService = {
     const response = await api.post('/chats/forward', { messageId, targetChatIds });
     return response.data || response;
   },
+
+  summarizeChat: async (chatId, options = {}) => {
+    const response = await api.post('/ai/chat-summary', {
+      chatId,
+      ...options,
+    });
+    return response.data || response;
+  },
 };
 

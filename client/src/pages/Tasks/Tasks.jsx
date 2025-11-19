@@ -22,10 +22,12 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   AttachFile as AttachFileIcon,
+  AutoAwesome as AutoAwesomeIcon,
 } from '@mui/icons-material';
 import { useTasks } from '../../context/TaskContext';
 import { useAuth } from '../../hooks/useAuth';
 import TaskDialog from '../../components/Tasks/TaskDialog';
+import TaskBotDrawer from '../../components/Tasks/TaskBotDrawer';
 import Loading from '../../components/Common/Loading';
 import { userService } from '../../services/userService';
 import { format } from 'date-fns';
@@ -39,6 +41,7 @@ const Tasks = () => {
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [taskBotOpen, setTaskBotOpen] = useState(false);
 
   const canManageTasks = user?.role === 'manager' || user?.role === 'admin';
   const isMember = user?.role === 'member';
@@ -132,20 +135,36 @@ const Tasks = () => {
           </Typography>
         </Box>
         {canManageTasks && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleCreate}
-            sx={{
-              borderRadius: 2,
-              px: 3,
-              py: 1.5,
-              textTransform: 'none',
-              fontWeight: 500,
-            }}
-          >
-            New Task
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleCreate}
+              sx={{
+                borderRadius: 2,
+                px: 3,
+                py: 1.5,
+                textTransform: 'none',
+                fontWeight: 500,
+              }}
+            >
+              New Task
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<AutoAwesomeIcon />}
+              onClick={() => setTaskBotOpen(true)}
+              sx={{
+                borderRadius: 2,
+                px: 3,
+                py: 1.5,
+                textTransform: 'none',
+                fontWeight: 500,
+              }}
+            >
+              TaskBot
+            </Button>
+          </Box>
         )}
       </Box>
 
@@ -330,6 +349,7 @@ const Tasks = () => {
         task={selectedTask}
         canEdit={true}
       />
+      <TaskBotDrawer open={taskBotOpen} onClose={() => setTaskBotOpen(false)} />
     </Box>
   );
 };

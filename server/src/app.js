@@ -13,6 +13,7 @@ const userRoutes = require('./routes/user');
 const projectRoutes = require('./routes/project');
 const chatRoutes = require('./routes/chat');
 const notificationRoutes = require('./routes/notification');
+const aiRoutes = require('./routes/ai');
 
 // Import middleware
 const errorHandler = require('./middleware/error');
@@ -100,6 +101,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Error handling middleware (must be last)
 app.use(notFound);

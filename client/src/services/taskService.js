@@ -130,5 +130,15 @@ export const taskService = {
     });
     return response;
   },
+
+  generateTasksWithAI: async (payload) => {
+    const response = await api.post('/ai/task-bot', payload);
+    return response.data || response;
+  },
+
+  summarizeTask: async (taskId) => {
+    const response = await api.post('/ai/task-summary', { taskId });
+    return response.data || response;
+  },
 };
 

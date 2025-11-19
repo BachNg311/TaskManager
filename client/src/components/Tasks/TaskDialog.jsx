@@ -16,11 +16,20 @@ import {
   IconButton,
   Typography,
   Alert,
+  CircularProgress,
+  Tooltip,
+  Stack,
 } from '@mui/material';
 import { useTasks } from '../../context/TaskContext';
 import { userService } from '../../services/userService';
 import { taskService } from '../../services/taskService';
-import { AttachFile as AttachFileIcon, Delete as DeleteIcon, Image as ImageIcon, InsertDriveFile as FileIcon } from '@mui/icons-material';
+import {
+  AttachFile as AttachFileIcon,
+  Delete as DeleteIcon,
+  Image as ImageIcon,
+  InsertDriveFile as FileIcon,
+  Summarize as SummarizeIcon,
+} from '@mui/icons-material';
 import ChecklistInput from './ChecklistInput';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -43,6 +52,9 @@ const TaskDialog = ({ open, onClose, task, canEdit = true }) => {
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [downloadingIndex, setDownloadingIndex] = useState(null);
   const [checklist, setChecklist] = useState([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [taskSummary, setTaskSummary] = useState(null);
+  const [summaryError, setSummaryError] = useState('');
 
   // Determine if user is a member who can only edit checklist
   const isMember = user?.role === 'member';
@@ -76,6 +88,32 @@ const TaskDialog = ({ open, onClose, task, canEdit = true }) => {
   
   const canOnlyEditChecklist = isMember && task && isAssignedToTask && canEdit;
   const canEditAllFields = canEdit && (!isMember || !task);
+  const canSummarizeTask = Boolean(task?._id);
+
+  const getRiskChipColor = (risk = 'low') => {
+    const value = (risk || '').toLowerCase();
+    if (value === 'high') return 'error';
+    if (value === 'medium') return 'warning';
+    return 'success';
+  };
+
+  const renderSummaryList = (label, items = []) => {
+    if (!Array.isArray(items) || items.length === 0) return null;
+    return (
+      <Box>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+          {label}
+        </Typography>
+        <Box component="ul" sx={{ pl: 3, m: 0 }}>
+          {items.map((item, index) => (
+            <Typography key={`${label}-${index}`} component="li" variant="body2">
+              {item}
+            </Typography>
+          ))}
+        </Box>
+      </Box>
+    );
+  };
   
   // Debug logging
   console.log('🔍 TaskDialog Permissions:', {
@@ -132,6 +170,18 @@ const TaskDialog = ({ open, onClose, task, canEdit = true }) => {
     }
     setError('');
   }, [task, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setTaskSummary(null);
+      setSummaryError('');
+      setSummaryLoading(false);
+      return;
+    }
+    setTaskSummary(null);
+    setSummaryError('');
+    setSummaryLoading(false);
+  }, [open, task?._id]);
 
   // Fetch users when dialog opens
   useEffect(() => {
@@ -201,6 +251,24 @@ const TaskDialog = ({ open, onClose, task, canEdit = true }) => {
       setUploadingFiles(false);
       // Reset file input
       e.target.value = '';
+    }
+  };
+
+  const handleSummarizeTask = async () => {
+    if (!task?._id) return;
+    setSummaryError('');
+    setSummaryLoading(true);
+    try {
+      const response = await taskService.summarizeTask(task._id);
+      const payload = response?.data || response;
+      const summaryData = payload?.data || payload;
+      setTaskSummary(summaryData);
+    } catch (err) {
+      const message = err.response?.data?.message || err.message || 'Failed to summarize task.';
+      setSummaryError(message);
+      setTaskSummary(null);
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -414,13 +482,94 @@ const TaskDialog = ({ open, onClose, task, canEdit = true }) => {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        {task ? (canEditAllFields ? 'Edit Task' : (canOnlyEditChecklist ? 'Update Task Checklist' : 'Task Details')) : 'Create New Task'}
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+        <Typography variant="h6" component="span">
+          {task
+            ? (canEditAllFields ? 'Edit Task' : (canOnlyEditChecklist ? 'Update Task Checklist' : 'Task Details'))
+            : 'Create New Task'}
+        </Typography>
+        {task && (
+          <Tooltip title={canSummarizeTask ? 'Summarize task with AI' : 'Save task before summarizing'}>
+            <span>
+              <IconButton
+                onClick={handleSummarizeTask}
+                disabled={!canSummarizeTask || summaryLoading}
+                size="small"
+              >
+                {summaryLoading ? <CircularProgress size={18} /> : <SummarizeIcon />}
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
       </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           {error && (
             <Box sx={{ color: 'error.main', fontSize: '0.875rem' }}>{error}</Box>
+          )}
+          {task && (taskSummary || summaryError || summaryLoading) && (
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 2,
+              }}
+            >
+              <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                  AI Summary
+                </Typography>
+                <Button
+                  size="small"
+                  startIcon={<SummarizeIcon fontSize="small" />}
+                  onClick={handleSummarizeTask}
+                  disabled={!canSummarizeTask || summaryLoading}
+                >
+                  {summaryLoading ? 'Summarizing…' : 'Refresh'}
+                </Button>
+              </Stack>
+              {summaryLoading && (
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                  <CircularProgress size={16} />
+                  <Typography variant="body2" color="text.secondary">
+                    Summarizing task details…
+                  </Typography>
+                </Stack>
+              )}
+              {!summaryLoading && summaryError && (
+                <Alert severity="error" sx={{ mt: 1 }}>
+                  {summaryError}
+                </Alert>
+              )}
+              {taskSummary && (
+                <Stack spacing={1.5} sx={{ mt: 1 }}>
+                  <Typography variant="body2">{taskSummary.summary}</Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip
+                      size="small"
+                      color={getRiskChipColor(taskSummary.riskLevel)}
+                      label={`Risk: ${taskSummary.riskLevel || 'low'}`}
+                    />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`${taskSummary.progress?.length || 0} progress item${(taskSummary.progress?.length || 0) === 1 ? '' : 's'}`}
+                    />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`${taskSummary.blockers?.length || 0} blocker${(taskSummary.blockers?.length || 0) === 1 ? '' : 's'}`}
+                    />
+                  </Stack>
+                  {renderSummaryList('Progress', taskSummary.progress)}
+                  {renderSummaryList('Blockers', taskSummary.blockers)}
+                  {renderSummaryList('Action Items', taskSummary.actionItems)}
+                  {renderSummaryList('Attachments', taskSummary.attachmentsSummary)}
+                  {renderSummaryList('Follow-up Questions', taskSummary.followUpQuestions)}
+                </Stack>
+              )}
+            </Box>
           )}
           {canOnlyEditChecklist && (
             <Box sx={{ 

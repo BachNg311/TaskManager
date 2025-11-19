@@ -28,6 +28,18 @@ Task list:
 
 ![Task list](assets/TaskLists.png)
 
+AI Task summary:
+
+![AI task summary](assets/AI_Task_Summary.png)
+
+AI Chat summary:
+
+![AI chat summary](assets/AI_Chat_Summary.png)
+
+TaskBot assistant:
+
+![TaskBot assistant](assets/TaskBot.png)
+
 Manager review page:
 
 ![Review tasks](assets/Review_Task%20.png)
@@ -38,6 +50,8 @@ Manager review page:
 - **JWT Authentication** – Secure authentication with password reset via OTP
 - **Task Management** – Full CRUD operations with attachments, comments, and checklists
 - **Kanban Board** – Drag-and-drop task organization with real-time updates
+- **AI TaskBot** – Generate fully scoped tasks from natural language using Gemini 2.5 Flash
+- **AI Chat Summaries** – Summarize any conversation with a single click via Gemini
 - **Real-time Chat** – Direct and group messaging with file/image attachments
 - **Role-Based Access Control** – Admin, Manager, and Member roles with different permissions
 - **Dashboard** – Statistics, charts, and analytics
@@ -58,6 +72,7 @@ Manager review page:
 - Read receipts
 - Message editing and deletion
 - System messages for chat events
+- AI-powered chat summaries (Gemini 2.5 Flash)
 
 ### Task Features
 - Task statuses: To Do, In Progress, Review, Done
@@ -66,6 +81,8 @@ Manager review page:
 - Task assignments (must assign to at least one member)
 - Comments and discussions
 - Checklists with completion tracking
+- AI-assisted task generation via TaskBot with automatic checklists and notifications
+- AI-powered task summaries (Gemini) that include attachments, comments, and checklists
 - File attachments
 - Task archiving
 - Task statistics and analytics
@@ -225,6 +242,10 @@ AWS_S3_BUCKET_NAME=your-bucket-name
 # SendGrid (for email/password reset)
 SENDGRID_API_KEY=your-sendgrid-api-key
 SENDGRID_FROM_EMAIL=noreply@yourdomain.com
+
+# Google Gemini (TaskBot)
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.0-flash
 ```
 
 **Client** (`client/.env`):
@@ -348,6 +369,15 @@ docker-compose up -d
 - `POST /api/tasks/:taskId/attachments` - Upload task attachment
 - `GET /api/tasks/attachments/download` - Download task attachment (signed URL)
 
+### AI TaskBot
+- `POST /api/ai/task-bot` - Generate and create tasks automatically from a natural-language prompt (Manager/Admin only)
+
+### AI Chat Summaries
+- `POST /api/ai/chat-summary` - Summarize the latest portion of a chat using Gemini (available to chat participants)
+
+### AI Task Summaries
+- `POST /api/ai/task-summary` - Summarize a task (metadata, comments, checklist, attachments) using Gemini
+
 ### Chats
 - `GET /api/chats` - Get all user chats
 - `GET /api/chats/direct/:userId` - Get or create direct chat
@@ -464,6 +494,7 @@ npm test               # Run tests
 - Support for attachments, comments, and checklists
 - Real-time status updates via Socket.IO
 - Drag-and-drop on Kanban board
+- TaskBot uses Gemini 2.5 Flash to transform prompts into scoped tasks with due dates and checklists
 
 ### Chat System
 - Direct messaging (1-on-1)

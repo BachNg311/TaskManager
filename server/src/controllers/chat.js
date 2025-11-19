@@ -389,22 +389,43 @@ const getMessages = async (req, res) => {
 
     const total = await Message.countDocuments(messageQuery);
 
-    // Mark messages as read
-    await Message.updateMany(
-      {
-        chat: id,
-        sender: { $ne: req.user._id },
-        'readBy.user': { $ne: req.user._id }
-      },
-      {
-        $push: {
-          readBy: {
-            user: req.user._id,
-            readAt: new Date()
+    // Mark messages as read and emit read receipts
+    const unreadMessages = await Message.find({
+      chat: id,
+      sender: { $ne: req.user._id },
+      'readBy.user': { $ne: req.user._id }
+    }).select('_id sender');
+
+    if (unreadMessages.length > 0) {
+      await Message.updateMany(
+        {
+          chat: id,
+          sender: { $ne: req.user._id },
+          'readBy.user': { $ne: req.user._id }
+        },
+        {
+          $push: {
+            readBy: {
+              user: req.user._id,
+              readAt: new Date()
+            }
           }
         }
+      );
+
+      // Emit read receipts to message senders via WebSocket
+      const io = getIOInstance();
+      if (io) {
+        const messageIds = unreadMessages.map(msg => msg._id.toString());
+        // Emit to the chat room so all participants see updated read status
+        io.to(`chat:${id}`).emit('messages:read', {
+          chatId: id,
+          messageIds,
+          readBy: req.user._id.toString(),
+          readAt: new Date()
+        });
       }
-    );
+    }
 
     const orderedMessages = messages.reverse().map(formatMessageForClient);
 
