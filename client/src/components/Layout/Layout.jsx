@@ -31,6 +31,7 @@ import { useAuth } from '../../hooks/useAuth';
 import NotificationBell from '../Common/NotificationBell';
 
 const drawerWidth = 260;
+const logoUrl = 'https://i.redd.it/hi-this-is-a-logo-for-the-task-manager-application-called-v0-si3hzlaglc7b1.png?width=8113&format=png&auto=webp&s=750d601f5c083ada2e639535f6b0576fbcb2dc31';
 
 // Base menu; visibility is filtered later by user role where needed
 const menuItems = [
@@ -80,21 +81,36 @@ const Layout = () => {
           px: { xs: 2, sm: 3 },
         }}
       >
-        <Typography 
-          variant="h6" 
-          noWrap 
-          component="div" 
-          sx={{ 
-            fontWeight: 700, 
-            fontSize: { xs: '1.1rem', sm: '1.25rem' },
-            background: 'linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}
-        >
-          Task Manager
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box
+            component="img"
+            src={logoUrl}
+            alt="Task Manager logo"
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              objectFit: 'cover',
+              boxShadow: '0 6px 12px rgba(0,0,0,0.25)',
+              border: '2px solid rgba(255,255,255,0.2)',
+            }}
+          />
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              fontWeight: 700, 
+              fontSize: { xs: '1.1rem', sm: '1.25rem' },
+              background: 'linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
+          >
+            Task Manager
+          </Typography>
+        </Box>
       </Toolbar>
       <Divider />
       <List sx={{ flex: 1, pt: 2, px: 1 }}>
@@ -209,19 +225,34 @@ const Layout = () => {
           >
             <MenuIcon />
           </IconButton>
-          <Typography
-            variant="h6"
-            noWrap
-            component="div"
-            sx={{
-              flexGrow: 1,
-              fontWeight: 600,
-              color: 'text.primary',
-              fontSize: { xs: '1rem', sm: '1.25rem' },
-            }}
-          >
-            {menuItems.find((item) => item.path === location.pathname)?.text || 'Task Manager'}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexGrow: 1 }}>
+            <Box
+              component="img"
+              src={logoUrl}
+              alt="Task Manager logo"
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: '50%',
+                objectFit: 'cover',
+                display: { xs: 'none', sm: 'block' },
+                boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+              }}
+            />
+            <Typography
+              variant="h6"
+              noWrap
+              component="div"
+              sx={{
+                flexGrow: 1,
+                fontWeight: 600,
+                color: 'text.primary',
+                fontSize: { xs: '1rem', sm: '1.25rem' },
+              }}
+            >
+              {menuItems.find((item) => item.path === location.pathname)?.text || 'Task Manager'}
+            </Typography>
+          </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
             <NotificationBell />
             <Box sx={{ display: { xs: 'none', lg: 'flex' }, flexDirection: 'column', alignItems: 'flex-end' }}>
