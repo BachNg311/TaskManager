@@ -1,6 +1,6 @@
 ## Task Manager – Full‑Stack Application
 
-A full‑featured task management and collaboration platform built with React, Material‑UI, Node.js/Express, MongoDB, and Socket.IO. The application supports real‑time chat, task management with checklists and review workflows, Kanban boards, and role‑based access control for admins, managers, and members.
+A full‑featured task management and collaboration platform built with React, Material‑UI, Node.js/Express, MongoDB, AWS, Gemini API and Socket.IO. The application supports real‑time chat, task management with checklists and review workflows, Kanban boards, and role‑based access control for admins, managers, and members.
 
 ### Screenshots
 
@@ -245,7 +245,7 @@ SENDGRID_FROM_EMAIL=noreply@yourdomain.com
 
 # Google Gemini (TaskBot)
 GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 **Client** (`client/.env`):
@@ -542,6 +542,4 @@ This project is licensed under the MIT License.
 - MongoDB for the database
 - AWS S3 for file storage
 
----
 
-**Built with using React, Node.js, and MongoDB**
