@@ -114,8 +114,8 @@ Manager review page:
 - **Node.js** 20+ and npm
 - **MongoDB** (local installation or MongoDB Atlas)
 - **Redis** (optional, for caching)
-- **AWS S3** (for file storage) - Optional but recommended
-- **SendGrid** (for email) - Optional, for password reset
+- **AWS S3** (for file storage) 
+- **SendGrid** (for email) 
 
 ### Installation
 
