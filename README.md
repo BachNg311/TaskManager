@@ -4,14 +4,6 @@ A full‑featured task management and collaboration platform built with React, M
 
 ### Screenshots
 
-Sign in:
-
-![Sign in](assets/SignIn.png)
-
-Sign up:
-
-![Sign up](assets/SignUp.png)
-
 Chat screen:
 
 ![Chat screen](assets/ChatScreen.png)
@@ -114,74 +106,6 @@ Manager review page:
     - `PUT /api/notifications/:id/read`
     - `PUT /api/notifications/read-all`
     - `DELETE /api/notifications/:id`
-
-## Project Structure
-
-```
-TaskManager/
-├── client/                      # React frontend
-│   ├── src/
-│   │   ├── components/          # Reusable components
-│   │   │   ├── Chat/           # Chat components (ChatList, MessageList, etc.)
-│   │   │   ├── Common/         # Common components (Loading, etc.)
-│   │   │   ├── Dashboard/      # Dashboard components
-│   │   │   ├── Layout/         # Layout components (Sidebar, Header)
-│   │   │   └── Tasks/          # Task-related components
-│   │   ├── context/            # React Context providers
-│   │   │   ├── AuthContext.jsx
-│   │   │   ├── SocketContext.jsx
-│   │   │   └── TaskContext.jsx
-│   │   ├── hooks/              # Custom React hooks
-│   │   ├── pages/              # Page components
-│   │   │   ├── Auth/           # Authentication pages
-│   │   │   ├── Chat/           # Chat page
-│   │   │   ├── Dashboard/      # Dashboard page
-│   │   │   ├── Kanban/         # Kanban board page
-│   │   │   ├── Profile/        # Profile page
-│   │   │   └── Tasks/          # Tasks page
-│   │   ├── services/           # API service functions
-│   │   └── styles/             # Theme and global styles
-│   └── public/                 # Static files
-│
-├── server/                     # Node.js/Express backend
-│   ├── src/
-│   │   ├── config/             # Configuration files
-│   │   │   ├── database.js     # MongoDB connection
-│   │   │   ├── jwt.js          # JWT configuration
-│   │   │   └── redis.js        # Redis configuration
-│   │   ├── controllers/        # Route controllers
-│   │   │   ├── auth.js         # Authentication controller
-│   │   │   ├── chat.js         # Chat controller
-│   │   │   ├── task.js         # Task controller
-│   │   │   ├── user.js         # User controller
-│   │   │   └── project.js      # Project controller
-│   │   ├── middleware/         # Express middleware
-│   │   │   ├── auth.js         # Authentication middleware
-│   │   │   ├── error.js        # Error handling
-│   │   │   └── validation.js   # Request validation
-│   │   ├── models/             # MongoDB models
-│   │   │   ├── User.js
-│   │   │   ├── Task.js
-│   │   │   ├── Chat.js
-│   │   │   ├── Message.js
-│   │   │   └── Project.js
-│   │   ├── routes/             # API routes
-│   │   ├── sockets/            # Socket.IO handlers
-│   │   ├── utils/              # Utility functions
-│   │   │   ├── s3Upload.js     # AWS S3 upload utilities
-│   │   │   ├── email.js        # Email sending (SendGrid)
-│   │   │   └── messageFormatter.js
-│   │   ├── app.js              # Express app setup
-│   │   └── server.js           # Server entry point
-│   ├── scripts/                # Utility scripts
-│   │   ├── createManager.js    # Create manager/admin accounts
-│   │   ├── generateTasks.js    # Generate test task data
-│   │   └── generateChats.js    # Generate test chat data
-│   ├── test/                   # Test files
-│   └── .env                    # Environment variables
-│
-└── docker-compose.yml          # Docker Compose configuration
-```
 
 ## Getting Started
 
@@ -396,7 +320,7 @@ docker-compose up -d
 
 
 
-## 🔐 Role-Based Access Control
+## Role-Based Access Control
 
 ### Admin
 - Full access to all features
