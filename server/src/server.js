@@ -46,7 +46,7 @@ socketHandler(io);
 // Connect to MongoDB
 connectDB();
 
-// Connect to Redis (optional, for caching)
+// Connect to Redis 
 connectRedis();
 
 // Start server

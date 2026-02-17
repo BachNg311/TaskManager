@@ -35,7 +35,6 @@ const connectRedis = async () => {
     await redisClient.connect();
   } catch (error) {
     console.error('❌ Redis connection error:', error.message);
-    // Don't exit - Redis is optional for caching
   }
 };
 
