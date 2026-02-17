@@ -26,6 +26,11 @@ export const authService = {
     return response.data || response;
   },
 
+  googleLogin: async (idToken) => {
+    const response = await api.post('/auth/google', { idToken });
+    return response.data || response;
+  },
+
   uploadAvatar: async (file) => {
     const formData = new FormData();
     formData.append('avatar', file);

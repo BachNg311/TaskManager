@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
 import Loading from '../../components/Common/Loading';
+import GoogleAuthButton from '../../components/Auth/GoogleAuthButton';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -205,7 +206,8 @@ const Register = () => {
             >
               Sign Up
             </Button>
-            <Box textAlign="center">
+            <GoogleAuthButton mode="signup" onError={setError} />
+            <Box textAlign="center" sx={{ mt: 2 }}>
               <Link to="/login" style={{ textDecoration: 'none' }}>
                 <Typography variant="body2" color="primary">
                   Already have an account? Sign In

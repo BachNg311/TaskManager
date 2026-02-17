@@ -84,6 +84,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async (idToken) => {
+    try {
+      const response = await authService.googleLogin(idToken);
+      const data = response?.data || response;
+      setToken(data.token);
+      setUser(data.user);
+      localStorage.setItem('token', data.token);
+      return { success: true };
+    } catch (error) {
+      console.error('Google login error:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Google login failed',
+      };
+    }
+  };
+
   const register = async (name, email, password) => {
     try {
       const response = await authService.register(name, email, password);
@@ -152,6 +169,7 @@ export const AuthProvider = ({ children }) => {
     token,
     loading,
     login,
+    loginWithGoogle,
     register,
     logout,
     refreshUser,

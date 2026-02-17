@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '../../hooks/useAuth';
 import Loading from '../../components/Common/Loading';
+import GoogleAuthButton from '../../components/Auth/GoogleAuthButton';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -101,7 +102,8 @@ const Login = () => {
             >
               Sign In
             </Button>
-            <Box textAlign="center">
+            <GoogleAuthButton mode="login" onError={setError} />
+            <Box textAlign="center" sx={{ mt: 2 }}>
               <Link to="/register" style={{ textDecoration: 'none' }}>
                 <Typography variant="body2" color="primary">
                   Don't have an account? Sign Up
