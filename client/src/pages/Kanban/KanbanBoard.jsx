@@ -16,7 +16,7 @@ const columns = [
 
 const KanbanBoard = () => {
   const { tasks, loading, setFilters, fetchTasks, updateTaskInContext } = useTasks();
-  const [isDragging, setIsDragging] = useState(false);
+  const [, setIsDragging] = useState(false);
   const [localTasks, setLocalTasks] = useState([]);
   const [pendingUpdates, setPendingUpdates] = useState(new Set());
   const pendingUpdatesRef = useRef(new Set());
@@ -41,7 +41,7 @@ const KanbanBoard = () => {
     if (tasks.length > 0 && localTasks.length === 0) {
       setLocalTasks(tasks);
     }
-  }, [tasks]);
+  }, [tasks, localTasks.length]);
 
   // Keep ref in sync
   useEffect(() => {
