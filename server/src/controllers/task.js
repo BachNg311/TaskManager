@@ -2,6 +2,8 @@ const Task = require('../models/Task');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { upload, getFileType, deleteFileFromS3, s3, extractS3KeyFromUrl, addSignedUrlToUserAvatar } = require('../utils/s3Upload');
+const redisModule = require('../config/redis');
+const getRedisClient = redisModule.getRedisClient;
 
 // Store io instance to emit events from controllers
 let ioInstance = null;
@@ -179,6 +181,26 @@ const getTasks = async (req, res) => {
 // @access  Private
 const getTask = async (req, res) => {
   try {
+    // Try Redis cache first
+    const client = getRedisClient && getRedisClient();
+    const cacheKey = `task:${req.params.id}`;
+    if (client) {
+      try {
+        const cached = await client.get(cacheKey);
+        if (cached) {
+          const cachedTask = JSON.parse(cached);
+          return res.json({
+            success: true,
+            data: cachedTask,
+            cached: true
+          });
+        }
+      } catch (err) {
+        console.error('Redis GET error for', cacheKey, err);
+        // Fall through to DB fetch
+      }
+    }
+
     const task = await Task.findById(req.params.id)
       .populate('assignedTo', 'name email avatar')
       .populate('createdBy', 'name email avatar')
@@ -207,6 +229,15 @@ const getTask = async (req, res) => {
 
     // Add signed URLs to user avatars
     const taskWithSignedAvatars = processTaskForResponse(task);
+
+    // Cache the response in Redis (short TTL)
+    if (client) {
+      try {
+        await client.set(cacheKey, JSON.stringify(taskWithSignedAvatars), { EX: 300 }); // 5 minutes
+      } catch (err) {
+        console.error('Redis SET error for', cacheKey, err);
+      }
+    }
 
     res.json({
       success: true,
@@ -675,6 +706,14 @@ const updateTask = async (req, res) => {
       .populate('createdBy', 'name email avatar')
       .populate('project', 'name color');
 
+    // Invalidate cache for this task
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`task:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for task update', req.params.id, err);
+    }
+
     // Create notifications for newly assigned users (except the creator)
     const io = getIOInstance();
     const newAssigneeIds = newAssignees.map(a => a.toString());
@@ -806,6 +845,14 @@ const deleteTask = async (req, res) => {
 
     await task.deleteOne();
 
+    // Invalidate cache for this task
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`task:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for task delete', req.params.id, err);
+    }
+
     res.json({
       success: true,
       message: 'Task deleted successfully'
@@ -887,6 +934,14 @@ const addComment = async (req, res) => {
       success: true,
       data: task.comments[task.comments.length - 1]
     });
+
+    // Invalidate cache for this task (comments changed)
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`task:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for comment add', req.params.id, err);
+    }
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -1067,6 +1122,14 @@ const updateTaskStatus = async (req, res) => {
       success: true,
       data: taskWithSignedAvatars
     });
+
+    // Invalidate cache for this task (status changed)
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`task:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for status update', req.params.id, err);
+    }
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -1185,6 +1248,14 @@ const updateTaskChecklist = async (req, res) => {
       data: taskWithSignedAvatars,
       message: task.status === 'review' ? 'All checklist items completed! Task moved to review.' : 'Checklist updated'
     });
+
+    // Invalidate cache for this task (checklist updated)
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`task:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for checklist update', req.params.id, err);
+    }
   } catch (error) {
     res.status(500).json({
       success: false,

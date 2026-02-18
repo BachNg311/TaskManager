@@ -1,5 +1,7 @@
 const Project = require('../models/Project');
 const Task = require('../models/Task');
+const redisModule = require('../config/redis');
+const getRedisClient = redisModule.getRedisClient;
 
 // @desc    Get all projects
 // @route   GET /api/projects
@@ -38,6 +40,21 @@ const getProjects = async (req, res) => {
 // @access  Private
 const getProject = async (req, res) => {
   try {
+    // Try Redis cache first
+    const client = getRedisClient && getRedisClient();
+    const cacheKey = `project:${req.params.id}`;
+    if (client) {
+      try {
+        const cached = await client.get(cacheKey);
+        if (cached) {
+          const cachedProject = JSON.parse(cached);
+          return res.json({ success: true, data: cachedProject, cached: true });
+        }
+      } catch (err) {
+        console.error('Redis GET error for', cacheKey, err);
+      }
+    }
+
     const project = await Project.findById(req.params.id)
       .populate('owner', 'name email avatar')
       .populate('members.user', 'name email avatar');
@@ -67,13 +84,18 @@ const getProject = async (req, res) => {
       .populate('assignedTo', 'name email avatar')
       .sort({ createdAt: -1 });
 
-    res.json({
-      success: true,
-      data: {
-        ...project.toObject(),
-        tasks
+    const result = { ...project.toObject(), tasks };
+
+    // Cache project (short TTL)
+    if (client) {
+      try {
+        await client.set(cacheKey, JSON.stringify(result), { EX: 300 });
+      } catch (err) {
+        console.error('Redis SET error for', cacheKey, err);
       }
-    });
+    }
+
+    res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -120,6 +142,14 @@ const updateProject = async (req, res) => {
       .populate('owner', 'name email avatar')
       .populate('members.user', 'name email avatar');
 
+    // Invalidate project cache
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`project:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for project update', req.params.id, err);
+    }
+
     res.json({
       success: true,
       data: updatedProject
@@ -155,6 +185,14 @@ const deleteProject = async (req, res) => {
     }
 
     await project.deleteOne();
+
+    // Invalidate project cache
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`project:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for project delete', req.params.id, err);
+    }
 
     res.json({
       success: true,
@@ -218,6 +256,14 @@ const addMember = async (req, res) => {
       success: true,
       data: project
     });
+
+    // Invalidate project cache (members changed)
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`project:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for project addMember', req.params.id, err);
+    }
   } catch (error) {
     res.status(500).json({
       success: false,

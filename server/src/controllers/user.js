@@ -1,5 +1,7 @@
 const User = require('../models/User');
 const { addSignedUrlToUserAvatar } = require('../utils/s3Upload');
+const redisModule = require('../config/redis');
+const getRedisClient = redisModule.getRedisClient;
 
 // @desc    Get all users
 // @route   GET /api/users
@@ -31,6 +33,18 @@ const getUsers = async (req, res) => {
 // @access  Private
 const getUser = async (req, res) => {
   try {
+    // Try Redis cache first
+    const client = getRedisClient && getRedisClient();
+    const cacheKey = `user:${req.params.id}`;
+    if (client) {
+      try {
+        const cached = await client.get(cacheKey);
+        if (cached) return res.json({ success: true, data: JSON.parse(cached), cached: true });
+      } catch (err) {
+        console.error('Redis GET error for', cacheKey, err);
+      }
+    }
+
     const user = await User.findById(req.params.id).select('-password');
 
     if (!user) {
@@ -42,6 +56,15 @@ const getUser = async (req, res) => {
 
     // Add signed URL to avatar
     const userWithSignedAvatar = addSignedUrlToUserAvatar(user);
+
+    // Cache user
+    if (client) {
+      try {
+        await client.set(cacheKey, JSON.stringify(userWithSignedAvatar), { EX: 300 });
+      } catch (err) {
+        console.error('Redis SET error for', cacheKey, err);
+      }
+    }
 
     res.json({
       success: true,
@@ -84,6 +107,14 @@ const updateUser = async (req, res) => {
 
     // Add signed URL to avatar
     const userWithSignedAvatar = addSignedUrlToUserAvatar(user);
+
+    // Invalidate user cache
+    try {
+      const client = getRedisClient && getRedisClient();
+      if (client) await client.del(`user:${req.params.id}`);
+    } catch (err) {
+      console.error('Redis DEL error for user update', req.params.id, err);
+    }
 
     res.json({
       success: true,
