@@ -27,10 +27,8 @@ app.use(compression());
 
 // CORS configuration - allow both localhost and production frontend
 const allowedOrigins = [
-  'http://localhost:3000',
-  'https://task-manager-client-eight-kappa.vercel.app',
-  process.env.FRONTEND_URL
-].filter(Boolean); // Remove undefined values
+  'http://localhost:3000'
+].filter(Boolean); 
 
 app.use(cors({
   origin: function (origin, callback) {

@@ -15,9 +15,7 @@ const server = http.createServer(app);
 
 // Initialize Socket.IO with CORS for both localhost and production
 const allowedSocketOrigins = [
-  'http://localhost:3000',
-  'https://task-manager-client-eight-kappa.vercel.app',
-  process.env.FRONTEND_URL
+  'http://localhost:3000'
 ].filter(Boolean);
 
 const io = new Server(server, {
