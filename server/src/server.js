@@ -15,7 +15,8 @@ const server = http.createServer(app);
 
 // Initialize Socket.IO with CORS for both localhost and production
 const allowedSocketOrigins = [
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://task-manager.centralus.cloudapp.azure.com:3000/',
 ].filter(Boolean);
 
 const io = new Server(server, {

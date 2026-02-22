@@ -27,7 +27,8 @@ app.use(compression());
 
 // CORS configuration - allow both localhost and production frontend
 const allowedOrigins = [
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'http://task-manager.centralus.cloudapp.azure.com:3000/',
 ].filter(Boolean); 
 
 app.use(cors({
