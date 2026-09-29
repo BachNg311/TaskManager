@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const mongoose = require('mongoose');
 const { addSignedUrlToUserAvatar } = require('../utils/s3Upload');
 const redisModule = require('../config/redis');
 const getRedisClient = redisModule.getRedisClient;
@@ -33,6 +34,13 @@ const getUsers = async (req, res) => {
 // @access  Private
 const getUser = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID'
+      });
+    }
+
     // Try Redis cache first
     const client = getRedisClient && getRedisClient();
     const cacheKey = `user:${req.params.id}`;
@@ -83,6 +91,13 @@ const getUser = async (req, res) => {
 // @access  Private
 const updateUser = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID'
+      });
+    }
+
     const isPrivilegedUser = req.user.role === 'admin' || req.user.role === 'manager';
     const isSelfUpdate = req.params.id === req.user._id.toString();
 
