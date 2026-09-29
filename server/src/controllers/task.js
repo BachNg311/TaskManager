@@ -181,10 +181,11 @@ const getTasks = async (req, res) => {
 // @access  Private
 const getTask = async (req, res) => {
   try {
-    // Try Redis cache first
+    // Try Redis cache first for unrestricted roles.
+    // Members have per-task access checks, so bypass cache to enforce authorization.
     const client = getRedisClient && getRedisClient();
     const cacheKey = `task:${req.params.id}`;
-    if (client) {
+    if (client && req.user.role !== 'member') {
       try {
         const cached = await client.get(cacheKey);
         if (cached) {
@@ -1570,4 +1571,3 @@ module.exports = {
   upload, // Export multer upload middleware
   getAttachmentDownloadUrl
 };
-
