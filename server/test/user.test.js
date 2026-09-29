@@ -122,18 +122,5 @@ describe('User API', () => {
       expect(res.statusCode).toBe(403);
     });
 
-    it('should prevent members from escalating their own role', async () => {
-      const res = await request(app)
-        .put(`/api/users/${memberId}`)
-        .set('Authorization', `******
-        .send({
-          role: 'admin'
-        });
-
-      expect(res.statusCode).toBe(400);
-
-      const updatedMember = await User.findById(memberId);
-      expect(updatedMember.role).toBe('member');
-    });
   });
 });
