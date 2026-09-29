@@ -56,6 +56,22 @@ const processTaskForResponse = (task) => {
   return taskObj;
 };
 
+const canUserAccessTask = (task, user) => {
+  if (!task || user.role !== 'member') {
+    return true;
+  }
+
+  const assignedToArray = Array.isArray(task.assignedTo)
+    ? task.assignedTo
+    : (task.assignedTo ? [task.assignedTo] : []);
+
+  return assignedToArray.some((assignee) => {
+    if (!assignee) return false;
+    const assigneeId = assignee._id || assignee.id || assignee;
+    return assigneeId.toString() === user._id.toString();
+  });
+};
+
 const getTodayUTC = () => {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -189,6 +205,12 @@ const getTask = async (req, res) => {
         const cached = await client.get(cacheKey);
         if (cached) {
           const cachedTask = JSON.parse(cached);
+          if (!canUserAccessTask(cachedTask, req.user)) {
+            return res.status(403).json({
+              success: false,
+              message: 'Not authorized to access this task'
+            });
+          }
           return res.json({
             success: true,
             data: cachedTask,
@@ -216,15 +238,11 @@ const getTask = async (req, res) => {
 
     // Check access - members can only view tasks assigned to them
     // Managers and admins can view all tasks
-    if (req.user.role === 'member') {
-      const assignedToArray = Array.isArray(task.assignedTo) ? task.assignedTo : (task.assignedTo ? [task.assignedTo] : []);
-      const isAssigned = assignedToArray.some(assignee => assignee.toString() === req.user._id.toString());
-      if (!isAssigned) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to access this task'
-        });
-      }
+    if (!canUserAccessTask(task, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this task'
+      });
     }
 
     // Add signed URLs to user avatars
@@ -1570,4 +1588,3 @@ module.exports = {
   upload, // Export multer upload middleware
   getAttachmentDownloadUrl
 };
-

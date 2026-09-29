@@ -83,18 +83,38 @@ const getUser = async (req, res) => {
 // @access  Private
 const updateUser = async (req, res) => {
   try {
+    const isPrivilegedUser = req.user.role === 'admin' || req.user.role === 'manager';
+    const isSelfUpdate = req.params.id === req.user._id.toString();
+
     // Users can only update themselves unless they're admin/manager
-    if (req.user.role !== 'admin' && req.user.role !== 'manager' &&
-        req.params.id !== req.user._id.toString()) {
+    if (!isPrivilegedUser && !isSelfUpdate) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to update this user'
       });
     }
 
+    const allowedFields = isPrivilegedUser
+      ? ['name', 'email', 'avatar', 'role', 'isActive']
+      : ['name', 'email', 'avatar'];
+
+    const updateData = {};
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    });
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields provided for update'
+      });
+    }
+
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     ).select('-password');
 
@@ -133,4 +153,3 @@ module.exports = {
   getUser,
   updateUser
 };
-

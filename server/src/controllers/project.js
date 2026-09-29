@@ -3,6 +3,22 @@ const Task = require('../models/Task');
 const redisModule = require('../config/redis');
 const getRedisClient = redisModule.getRedisClient;
 
+const canUserAccessProject = (project, user) => {
+  if (!project || user.role !== 'member') {
+    return true;
+  }
+
+  const ownerId = project.owner && (project.owner._id || project.owner.id || project.owner);
+  const isOwner = ownerId && ownerId.toString() === user._id.toString();
+  const isMember = Array.isArray(project.members) && project.members.some((member) => {
+    if (!member || !member.user) return false;
+    const memberId = member.user._id || member.user.id || member.user;
+    return memberId.toString() === user._id.toString();
+  });
+
+  return isOwner || isMember;
+};
+
 // @desc    Get all projects
 // @route   GET /api/projects
 // @access  Private
@@ -48,6 +64,12 @@ const getProject = async (req, res) => {
         const cached = await client.get(cacheKey);
         if (cached) {
           const cachedProject = JSON.parse(cached);
+          if (!canUserAccessProject(cachedProject, req.user)) {
+            return res.status(403).json({
+              success: false,
+              message: 'Not authorized to access this project'
+            });
+          }
           return res.json({ success: true, data: cachedProject, cached: true });
         }
       } catch (err) {
@@ -67,12 +89,7 @@ const getProject = async (req, res) => {
     }
 
     // Check access
-    const isOwner = project.owner._id.toString() === req.user._id.toString();
-    const isMember = project.members.some(
-      m => m.user._id.toString() === req.user._id.toString()
-    );
-
-    if (req.user.role === 'member' && !isOwner && !isMember) {
+    if (!canUserAccessProject(project, req.user)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to access this project'
@@ -280,4 +297,3 @@ module.exports = {
   deleteProject,
   addMember
 };
-
