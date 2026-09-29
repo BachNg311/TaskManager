@@ -127,11 +127,7 @@ const updateUser = async (req, res) => {
       });
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password');
+    const user = await User.findById(req.params.id).select('-password');
 
     if (!user) {
       return res.status(404).json({
@@ -139,6 +135,9 @@ const updateUser = async (req, res) => {
         message: 'User not found'
       });
     }
+
+    Object.assign(user, updateData);
+    await user.save();
 
     // Add signed URL to avatar
     const userWithSignedAvatar = addSignedUrlToUserAvatar(user);
