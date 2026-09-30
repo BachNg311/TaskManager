@@ -24,7 +24,8 @@ const notificationSchema = new mongoose.Schema({
       'forward_message',
       'task_pending_review',
       'task_approved',
-      'task_rejected', 
+      'task_rejected',
+      'task_unblocked',
     ],
     required: true
   },
