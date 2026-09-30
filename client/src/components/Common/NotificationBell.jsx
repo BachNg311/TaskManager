@@ -21,7 +21,6 @@ import {
   Assignment as TaskIcon,
   Comment as CommentIcon,
   Chat as ChatIcon,
-  Person as PersonIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useNotifications } from '../../context/NotificationContext';

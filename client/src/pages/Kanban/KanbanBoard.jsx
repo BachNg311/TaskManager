@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Box, Paper, Typography, Card, CardContent, Chip } from '@mui/material';
+import { Box, Typography, Card, CardContent, Chip } from '@mui/material';
 import { Person as PersonIcon, AttachFile as AttachFileIcon, CheckCircle as CheckCircleIcon } from '@mui/icons-material';
 import { useTasks } from '../../context/TaskContext';
 import { taskService } from '../../services/taskService';

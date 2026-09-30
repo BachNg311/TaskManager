@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -6,10 +6,6 @@ import {
   DialogActions,
   Button,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Box,
   Typography,
   Chip,
@@ -36,13 +32,7 @@ const NewChatDialog = ({ open, onClose, onChatCreated, existingChats = [] }) => 
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
 
-  useEffect(() => {
-    if (open) {
-      fetchUsers();
-    }
-  }, [open, existingChats, tabValue]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const response = await userService.getUsers();
       const usersData = response.data || response || [];
@@ -99,7 +89,13 @@ const NewChatDialog = ({ open, onClose, onChatCreated, existingChats = [] }) => 
       // Set empty array on error to show "No members available" message
       setUsers([]);
     }
-  };
+  }, [tabValue, existingChats, user]);
+
+  useEffect(() => {
+    if (open) {
+      fetchUsers();
+    }
+  }, [open, fetchUsers]);
 
   const handleCreateDirectChat = async () => {
     if (!selectedUser) return;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -7,7 +7,6 @@ import {
   IconButton,
   Avatar,
   Chip,
-  Fab,
   CircularProgress,
   Dialog,
   DialogTitle,
@@ -31,7 +30,6 @@ import {
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../hooks/useAuth';
 import { chatService } from '../../services/chatService';
-import { userService } from '../../services/userService';
 import ChatList from '../../components/Chat/ChatList';
 import MessageList from '../../components/Chat/MessageList';
 import NewChatDialog from '../../components/Chat/NewChatDialog';
@@ -75,7 +73,7 @@ const Chat = () => {
   const { socket, connected } = useSocket();
   const { user } = useAuth();
 
-  const getIdString = (value) => {
+  const getIdString = useCallback((value) => {
     if (!value) return '';
     if (typeof value === 'string') return value;
     if (typeof value === 'object') {
@@ -83,17 +81,17 @@ const Chat = () => {
       if (typeof value.toString === 'function') return value.toString();
     }
     return String(value);
-  };
+  }, []);
 
-  const sortChatsByRecent = (list = []) => {
+  const sortChatsByRecent = useCallback((list = []) => {
     return [...list].sort((a, b) => {
       const dateA = new Date(a?.lastMessageAt || a?.createdAt || 0);
       const dateB = new Date(b?.lastMessageAt || b?.createdAt || 0);
       return dateB - dateA;
     });
-  };
+  }, []);
 
-  const updateChatPreviewFromMessage = (chatId, latestMessage) => {
+  const updateChatPreviewFromMessage = useCallback((chatId, latestMessage) => {
     if (!chatId || !latestMessage) return;
 
     const latestCreatedAt = latestMessage.createdAt || new Date().toISOString();
@@ -105,9 +103,6 @@ const Chat = () => {
       const updatedChats = prevChats.map((chat) => {
         const chatIdStr = getIdString(chat._id);
         if (chatIdStr !== chatId) return chat;
-
-        const currentLastAt = chat.lastMessageAt ? new Date(chat.lastMessageAt).getTime() : null;
-        const currentLastId = chat.lastMessage?._id?.toString() || chat.lastMessage?._id;
 
         didUpdate = true;
         return {
@@ -141,19 +136,14 @@ const Chat = () => {
         lastMessageAt: latestCreatedAt
       };
     });
-  };
+  }, [getIdString, sortChatsByRecent]);
 
-  const enhanceChat = (chat, overrides = {}) => {
+  const enhanceChat = useCallback((chat, overrides = {}) => {
     if (!chat) return chat;
     
     // Check if current user is a former participant (kicked/removed)
     const isFormerParticipant = chat.formerParticipants?.some(
-      fp => getIdString(fp._id || fp) === getIdString(user._id)
-    );
-    
-    // Check if current user is still an active participant
-    const isActiveParticipant = chat.participants?.some(
-      p => getIdString(p._id || p) === getIdString(user._id)
+      fp => getIdString(fp._id || fp) === getIdString(user?._id)
     );
     
     // User has left if they're a former participant OR explicitly marked as hasLeft
@@ -164,7 +154,7 @@ const Chat = () => {
       hasLeft,
       isFormerParticipant
     };
-  };
+  }, [getIdString, user]);
 
   const getSentimentColor = (sentiment = 'neutral') => {
     const value = (sentiment || '').toLowerCase();
@@ -173,7 +163,7 @@ const Chat = () => {
     return 'default';
   };
 
-  const markChatLeftState = (chatId, hasLeftValue) => {
+  const markChatLeftState = useCallback((chatId, hasLeftValue) => {
     setChats((prev) =>
       prev.map((chat) =>
         getIdString(chat._id) === chatId ? { ...chat, hasLeft: hasLeftValue } : chat
@@ -187,7 +177,7 @@ const Chat = () => {
       }
       return { ...prev, hasLeft: hasLeftValue };
     });
-  };
+  }, [getIdString]);
 
   // Fetch chats on mount
   useEffect(() => {
@@ -197,8 +187,9 @@ const Chat = () => {
         const enhanced = Array.isArray(data) ? data.map((chat) => enhanceChat(chat)) : [];
         const sortedChats = sortChatsByRecent(enhanced);
         setChats(sortedChats);
-        if (sortedChats.length > 0 && !selectedChat) {
-          setSelectedChat(enhanceChat(sortedChats[0]));
+        if (sortedChats.length > 0) {
+          // Only select the first chat if none is selected yet
+          setSelectedChat((prevSelected) => prevSelected || enhanceChat(sortedChats[0]));
         }
       } catch (error) {
         console.error('Error fetching chats:', error);
@@ -208,7 +199,7 @@ const Chat = () => {
     };
 
     fetchChats();
-  }, []);
+  }, [enhanceChat, sortChatsByRecent]);
 
   // Fetch messages when chat is selected
   useEffect(() => {
@@ -307,7 +298,7 @@ const Chat = () => {
       setMessages([]);
       setMentionUsers([]);
     }
-  }, [selectedChat, socket, connected, user._id]);
+  }, [selectedChat, socket, connected, user._id, updateChatPreviewFromMessage, getIdString]);
 
   // Join all chats to receive message events even when not actively viewing them
   useEffect(() => {
@@ -340,12 +331,14 @@ const Chat = () => {
 
   // Cleanup all joined chats on unmount / socket change
   useEffect(() => {
+    // Capture the ref value so the cleanup sees the chats joined by this effect run
+    const joinedChats = joinedChatsRef.current;
     return () => {
       if (!socket) return;
-      joinedChatsRef.current.forEach((chatId) => {
+      joinedChats.forEach((chatId) => {
         socket.emit('leave:chat', chatId);
       });
-      joinedChatsRef.current.clear();
+      joinedChats.clear();
     };
   }, [socket]);
 
@@ -872,7 +865,7 @@ const Chat = () => {
       socket.off('chat:left', handleChatLeft);
       socket.off('chat:removed', handleChatRemoved);
     };
-  }, [socket, connected, selectedChat, user]);
+  }, [socket, connected, selectedChat, user, enhanceChat, markChatLeftState, replyingTo, updateChatPreviewFromMessage, getIdString, sortChatsByRecent]);
 
   // Debug: Log when chats change
   useEffect(() => {

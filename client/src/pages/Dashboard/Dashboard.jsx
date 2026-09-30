@@ -27,7 +27,6 @@ const Dashboard = () => {
   
   // Check if user is manager or admin
   const canDownloadReport = user?.role === 'manager' || user?.role === 'admin';
-  const canManageTasks = user?.role === 'manager' || user?.role === 'admin';
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -82,7 +81,10 @@ const Dashboard = () => {
   ];
 
   // Get recent tasks (last 5)
-  const recentTasks = tasks
+  // NOTE: copy before sorting — Array.sort() sorts in place and `tasks`
+  // is shared context state, so sorting it directly would mutate the
+  // task list for every other view (Tasks page, Kanban board).
+  const recentTasks = [...tasks]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 5);
 

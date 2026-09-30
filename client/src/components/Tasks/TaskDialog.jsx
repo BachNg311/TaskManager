@@ -205,7 +205,7 @@ const TaskDialog = ({ open, onClose, task, canEdit = true }) => {
       };
       fetchUsers();
     }
-  }, [open]);
+  }, [open, canEdit]);
 
   const buildLocalDate = (dateStr) => {
     if (!dateStr) return null;

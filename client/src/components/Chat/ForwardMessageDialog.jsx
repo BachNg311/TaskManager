@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -30,6 +30,22 @@ const ForwardMessageDialog = ({ open, onClose, message, chats, currentUserId, on
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const getChatName = useCallback((chat) => {
+    if (chat.type === 'group') {
+      return chat.name;
+    }
+    // For direct chat, check for nickname first
+    const nickname = chat.nicknames?.get?.(currentUserId) || chat.nicknames?.[currentUserId];
+    if (nickname && nickname.trim()) {
+      return nickname;
+    }
+    // Show other participant's name
+    const otherParticipant = chat.participants?.find(
+      (p) => (p._id || p) !== currentUserId
+    );
+    return otherParticipant?.name || 'Unknown User';
+  }, [currentUserId]);
+
   // Filter out the current chat and search
   const availableChats = useMemo(() => {
     if (!chats || !message) return [];
@@ -49,23 +65,7 @@ const ForwardMessageDialog = ({ open, onClose, message, chats, currentUserId, on
       
       return true;
     });
-  }, [chats, message, searchQuery]);
-
-  const getChatName = (chat) => {
-    if (chat.type === 'group') {
-      return chat.name;
-    }
-    // For direct chat, check for nickname first
-    const nickname = chat.nicknames?.get?.(currentUserId) || chat.nicknames?.[currentUserId];
-    if (nickname && nickname.trim()) {
-      return nickname;
-    }
-    // Show other participant's name
-    const otherParticipant = chat.participants?.find(
-      (p) => (p._id || p) !== currentUserId
-    );
-    return otherParticipant?.name || 'Unknown User';
-  };
+  }, [chats, message, searchQuery, getChatName]);
 
   const getChatAvatar = (chat) => {
     if (chat.type === 'group') {
