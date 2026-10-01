@@ -27,7 +27,6 @@ const Dashboard = () => {
   
   // Check if user is manager or admin
   const canDownloadReport = user?.role === 'manager' || user?.role === 'admin';
-  const canManageTasks = user?.role === 'manager' || user?.role === 'admin';
 
   useEffect(() => {
     const fetchStats = async () => {

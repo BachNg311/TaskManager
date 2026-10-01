@@ -14,7 +14,7 @@ import {
   ListItemIcon,
   ListItemText as MenuItemText
 } from '@mui/material';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { MoreVert as MoreVertIcon, Delete as DeleteIcon, Logout as LogoutIcon } from '@mui/icons-material';
 
 const ChatList = ({ chats, selectedChat, onSelectChat, getChatName, getChatAvatar, onDeleteChat, onLeaveChat }) => {
@@ -232,4 +232,3 @@ const ChatList = ({ chats, selectedChat, onSelectChat, getChatName, getChatAvata
 };
 
 export default ChatList;
-

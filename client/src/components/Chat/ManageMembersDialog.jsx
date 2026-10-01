@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -39,13 +39,7 @@ const ManageMembersDialog = ({ open, onClose, chat, onMemberAdded, onMemberRemov
 
   const isCreator = chat?.createdBy?._id === currentUser?._id || chat?.createdBy === currentUser?._id;
 
-  useEffect(() => {
-    if (open) {
-      fetchUsers();
-    }
-  }, [open]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoadingUsers(true);
     try {
       const response = await userService.getUsers();
@@ -63,7 +57,13 @@ const ManageMembersDialog = ({ open, onClose, chat, onMemberAdded, onMemberRemov
     } finally {
       setLoadingUsers(false);
     }
-  };
+  }, [chat, currentUser]);
+
+  useEffect(() => {
+    if (open) {
+      fetchUsers();
+    }
+  }, [open, fetchUsers]);
 
   const handleAddMember = async () => {
     if (!selectedUser || !chat) return;

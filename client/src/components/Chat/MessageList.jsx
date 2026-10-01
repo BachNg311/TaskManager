@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Paper, Typography, Avatar, Chip, IconButton, Tooltip, Popover, TextField, Button, Link } from '@mui/material';
 import { Reply as ReplyIcon, Delete as DeleteIcon, Edit as EditIcon, EmojiEmotions as EmojiIcon, InsertDriveFile as FileIcon, Forward as ForwardIcon, DoneAll as DoneAllIcon, Done as DoneIcon } from '@mui/icons-material';
-import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
+import { format, isToday, isYesterday } from 'date-fns';
 
 const MessageList = ({ messages, currentUserId, messagesEndRef, onReply, onUnsend, onEdit, onReact, onForward }) => {
   const [hoveredMessage, setHoveredMessage] = useState(null);
