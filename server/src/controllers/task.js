@@ -77,6 +77,116 @@ const parseDateOnlyInput = (value) => {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 };
 
+// ---------- Task dependency helpers ----------
+
+/**
+ * Cycle detection: would making `taskId` depend on `depId` create a cycle?
+ * A cycle exists if `depId` can already reach `taskId` by following
+ * dependency edges (DFS over the dependency graph).
+ */
+const wouldCreateCycle = async (taskId, depId) => {
+  const target = taskId.toString();
+  const visited = new Set();
+  const stack = [depId.toString()];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === target) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+
+    const node = await Task.findById(current).select('dependencies').lean();
+    if (node && Array.isArray(node.dependencies)) {
+      for (const d of node.dependencies) {
+        stack.push(d.toString());
+      }
+    }
+  }
+
+  return false;
+};
+
+/**
+ * Returns the dependency tasks that are not yet done.
+ * A task is blocked when this list is non-empty.
+ */
+const getIncompleteDependencies = async (task) => {
+  if (!task.dependencies || task.dependencies.length === 0) return [];
+  return Task.find({
+    _id: { $in: task.dependencies },
+    status: { $ne: 'done' }
+  }).select('title status').lean();
+};
+
+const blockedResponse = (blockers, targetStatus) => ({
+  success: false,
+  message: `Cannot move task to "${targetStatus}". It is blocked by ${blockers.length} incomplete task${blockers.length > 1 ? 's' : ''}.`,
+  blockingTasks: blockers.map(b => ({
+    _id: b._id,
+    title: b.title,
+    status: b.status
+  }))
+});
+
+// Emit "task unblocked" notifications when a task that was blocking others completes.
+// Returns the ids of dependents that became unblocked.
+const notifyDependentsUnblocked = async (completedTask, io) => {
+  if (!completedTask) return [];
+
+  const dependents = await Task.find({
+    dependencies: completedTask._id,
+    isArchived: false,
+    status: { $ne: 'done' }
+  }).populate('assignedTo', 'name email');
+
+  const unblockedIds = [];
+
+  for (const dependent of dependents) {
+    const remainingBlockers = await getIncompleteDependencies(dependent);
+    if (remainingBlockers.length > 0) continue; // Still blocked by other tasks
+
+    const assignees = Array.isArray(dependent.assignedTo) ? dependent.assignedTo : [];
+    for (const assignee of assignees) {
+      const userIdStr = assignee._id ? assignee._id.toString() : assignee.toString();
+      const notification = await Notification.create({
+        user: userIdStr,
+        type: 'task_unblocked',
+        title: 'Task Unblocked',
+        message: `"${completedTask.title}" is done — "${dependent.title}" is no longer blocked.`,
+        relatedTask: dependent._id,
+        relatedProject: dependent.project
+      });
+
+      if (io) {
+        io.to(`user:${userIdStr}`).emit('notification:new', {
+          _id: notification._id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          relatedTask: dependent._id,
+          relatedProject: dependent.project,
+          isRead: false,
+          createdAt: notification.createdAt
+        });
+      }
+    }
+
+    console.log(`🔓 Task "${dependent.title}" unblocked after "${completedTask.title}" completed`);
+    unblockedIds.push(dependent._id.toString());
+  }
+
+  return unblockedIds;
+};
+
+const invalidateTaskCache = async (taskId) => {
+  try {
+    const client = getRedisClient && getRedisClient();
+    if (client) await client.del(`task:${taskId}`);
+  } catch (err) {
+    console.error('Redis DEL error for task', taskId, err);
+  }
+};
+
 // @desc    Get all tasks
 // @route   GET /api/tasks
 // @access  Private
@@ -158,6 +268,23 @@ const getTasks = async (req, res) => {
     // Add signed URLs to user avatars in tasks
     const tasksWithSignedAvatars = tasks.map(task => processTaskForResponse(task));
 
+    // Batch-compute blocked status: a task is blocked if any dependency is not done.
+    // One query for all incomplete dependencies instead of N+1 per task.
+    const allDepIds = [...new Set(
+      tasksWithSignedAvatars.flatMap(t => (t.dependencies || []).map(d => d.toString()))
+    )];
+    let incompleteDepIds = new Set();
+    if (allDepIds.length > 0) {
+      const incomplete = await Task.find({
+        _id: { $in: allDepIds },
+        status: { $ne: 'done' }
+      }).select('_id').lean();
+      incompleteDepIds = new Set(incomplete.map(d => d._id.toString()));
+    }
+    tasksWithSignedAvatars.forEach(t => {
+      t.isBlocked = (t.dependencies || []).some(d => incompleteDepIds.has(d.toString()));
+    });
+
     res.json({
       success: true,
       data: tasksWithSignedAvatars,
@@ -205,7 +332,8 @@ const getTask = async (req, res) => {
       .populate('assignedTo', 'name email avatar')
       .populate('createdBy', 'name email avatar')
       .populate('project', 'name color')
-      .populate('comments.user', 'name email avatar');
+      .populate('comments.user', 'name email avatar')
+      .populate('dependencies', 'title status priority dueDate project');
 
     if (!task) {
       return res.status(404).json({
@@ -229,6 +357,15 @@ const getTask = async (req, res) => {
 
     // Add signed URLs to user avatars
     const taskWithSignedAvatars = processTaskForResponse(task);
+
+    // Attach blocked status: a task is blocked while any dependency is not done
+    const blockers = await getIncompleteDependencies(task);
+    taskWithSignedAvatars.isBlocked = blockers.length > 0;
+    taskWithSignedAvatars.blockingTasks = blockers.map(b => ({
+      _id: b._id,
+      title: b.title,
+      status: b.status
+    }));
 
     // Cache the response in Redis (short TTL)
     if (client) {
@@ -388,6 +525,26 @@ const createTask = async (req, res) => {
     
     // Explicitly set attachments after parsing to avoid any string issues
     taskData.attachments = attachments;
+
+    // Validate optional initial dependencies (cycle is impossible on create,
+    // since the new task has no dependents yet)
+    if (req.body.dependencies !== undefined) {
+      if (!Array.isArray(req.body.dependencies)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Dependencies must be an array of task IDs'
+        });
+      }
+      const depIds = [...new Set(req.body.dependencies.map(String))];
+      const found = await Task.find({ _id: { $in: depIds } }).select('_id');
+      if (found.length !== depIds.length) {
+        return res.status(404).json({
+          success: false,
+          message: 'One or more dependency tasks not found'
+        });
+      }
+      taskData.dependencies = depIds;
+    }
 
     const task = await Task.create(taskData);
 
@@ -602,6 +759,14 @@ const updateTask = async (req, res) => {
           success: false,
           message: 'Due date must be in the future'
         });
+      }
+    }
+
+    // Blocked tasks cannot start or finish until their dependencies are done
+    if (req.body.status && ['in-progress', 'done'].includes(req.body.status) && req.body.status !== task.status) {
+      const blockers = await getIncompleteDependencies(task);
+      if (blockers.length > 0) {
+        return res.status(400).json(blockedResponse(blockers, req.body.status));
       }
     }
 
@@ -845,6 +1010,20 @@ const deleteTask = async (req, res) => {
 
     await task.deleteOne();
 
+    // Remove this task from other tasks' dependency lists (a deleted
+    // task can no longer block anything) and invalidate their caches
+    const dependents = await Task.find({ dependencies: task._id }).select('_id').lean();
+    if (dependents.length > 0) {
+      await Task.updateMany(
+        { dependencies: task._id },
+        { $pull: { dependencies: task._id } }
+      );
+      for (const d of dependents) {
+        await invalidateTaskCache(d._id);
+      }
+      console.log(`🔗 Removed deleted task ${task._id} from ${dependents.length} dependent(s)`);
+    }
+
     // Invalidate cache for this task
     try {
       const client = getRedisClient && getRedisClient();
@@ -994,6 +1173,14 @@ const updateTaskStatus = async (req, res) => {
       }
     }
 
+    // Blocked tasks cannot start or finish until their dependencies are done
+    if (['in-progress', 'done'].includes(status) && status !== task.status) {
+      const blockers = await getIncompleteDependencies(task);
+      if (blockers.length > 0) {
+        return res.status(400).json(blockedResponse(blockers, status));
+      }
+    }
+
     // Special logic for moving from review to done
     if (status === 'done' && task.status === 'review') {
       // Only managers/admins can approve tasks from review to done
@@ -1039,6 +1226,15 @@ const updateTaskStatus = async (req, res) => {
       .populate('project', 'name color');
 
     const io = getIOInstance();
+
+    // A completed task may unblock its dependents — notify them and
+    // drop their cached responses (their blocked state changed)
+    if (status === 'done') {
+      const unblockedIds = await notifyDependentsUnblocked(task, io);
+      for (const id of unblockedIds) {
+        await invalidateTaskCache(id);
+      }
+    }
 
     // Send notifications to assigned employees when manager approves task (moves from review to done)
     if (wasInReview && status === 'done') {
@@ -1261,6 +1457,137 @@ const updateTaskChecklist = async (req, res) => {
       success: false,
       message: error.message
     });
+  }
+};
+
+// @desc    Add a dependency to a task ("task is blocked by dependency")
+// @route   POST /api/tasks/:id/dependencies
+// @access  Private (Manager/Admin only)
+const addDependency = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { dependencyId } = req.body;
+
+    if (id === dependencyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'A task cannot depend on itself'
+      });
+    }
+
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    const dependency = await Task.findById(dependencyId);
+    if (!dependency) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dependency task not found'
+      });
+    }
+
+    if (task.dependencies.some(d => d.toString() === dependencyId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dependency already added to this task'
+      });
+    }
+
+    if (await wouldCreateCycle(id, dependencyId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Adding this dependency would create a circular dependency'
+      });
+    }
+
+    task.dependencies.push(dependencyId);
+    await task.save();
+
+    await invalidateTaskCache(id);
+
+    const populated = await Task.findById(id)
+      .populate('dependencies', 'title status priority dueDate');
+
+    const blockers = await getIncompleteDependencies(task);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        dependencies: populated.dependencies,
+        isBlocked: blockers.length > 0
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Remove a dependency from a task
+// @route   DELETE /api/tasks/:id/dependencies/:dependencyId
+// @access  Private (Manager/Admin only)
+const removeDependency = async (req, res) => {
+  try {
+    const { id, dependencyId } = req.params;
+
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    const hadDependency = task.dependencies.some(d => d.toString() === dependencyId);
+    if (!hadDependency) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dependency not found on this task'
+      });
+    }
+
+    task.dependencies = task.dependencies.filter(d => d.toString() !== dependencyId);
+    await task.save();
+
+    await invalidateTaskCache(id);
+
+    res.json({
+      success: true,
+      message: 'Dependency removed',
+      data: { dependencies: task.dependencies }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get tasks that depend on this task (its dependents / downstream)
+// @route   GET /api/tasks/:id/dependents
+// @access  Private
+const getDependents = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id).select('_id');
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    const query = { dependencies: req.params.id, isArchived: false };
+
+    // Members only see dependents assigned to them
+    if (req.user.role === 'member') {
+      query.assignedTo = { $in: [req.user._id] };
+    }
+
+    const dependents = await Task.find(query)
+      .populate('assignedTo', 'name email avatar')
+      .populate('project', 'name color')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: dependents.length,
+      data: dependents.map(processTaskForResponse)
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -1563,6 +1890,9 @@ module.exports = {
   updateTaskChecklist,
   deleteTask,
   addComment,
+  addDependency,
+  removeDependency,
+  getDependents,
   getTaskStats,
   getAllUsersTaskReport,
   getDetailedTaskReport,

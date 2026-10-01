@@ -173,7 +173,13 @@ const taskSchema = new mongoose.Schema({
   isArchived: {
     type: Boolean,
     default: false
-  }
+  },
+  // Tasks this task depends on. A task is "blocked" until all
+  // dependencies are done. Cycles are rejected at write time.
+  dependencies: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Task'
+  }]
 }, {
   timestamps: true
 });

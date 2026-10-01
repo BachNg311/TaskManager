@@ -9,6 +9,9 @@ const {
   updateTaskChecklist,
   deleteTask,
   addComment,
+  addDependency,
+  removeDependency,
+  getDependents,
   getTaskStats,
   getAllUsersTaskReport,
   getDetailedTaskReport,
@@ -43,7 +46,9 @@ const createTaskValidation = [
     return true;
   }),
   body('assignedTo').isArray({ min: 1 }).withMessage('Assigned To Employee is required and must be a non-empty array'),
-  body('assignedTo.*').isMongoId().withMessage('Each assigned user must be a valid user ID')
+  body('assignedTo.*').isMongoId().withMessage('Each assigned user must be a valid user ID'),
+  body('dependencies').optional().isArray().withMessage('Dependencies must be an array of task IDs'),
+  body('dependencies.*').optional().isMongoId().withMessage('Each dependency must be a valid task ID')
 ];
 
 // Validation rules for updating tasks (fields optional)
@@ -75,6 +80,18 @@ router.post('/:id/comments',
   validate,
   addComment
 );
+// Task dependencies — only managers/admins can restructure the dependency graph
+router.post('/:id/dependencies',
+  authorize('manager', 'admin'),
+  body('dependencyId').isMongoId().withMessage('dependencyId must be a valid task ID'),
+  validate,
+  addDependency
+);
+router.delete('/:id/dependencies/:dependencyId',
+  authorize('manager', 'admin'),
+  removeDependency
+);
+router.get('/:id/dependents', getDependents);
 
 module.exports = router;
 

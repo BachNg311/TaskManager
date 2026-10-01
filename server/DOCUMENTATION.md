@@ -22,12 +22,21 @@ This document lists all backend API endpoints discovered in the repository (moun
 - GET /api/tasks/attachments/download — Get attachment download URL
 - GET /api/tasks/ — List tasks
 - GET /api/tasks/:id — Get single task
-- POST /api/tasks/ — Create task (authorize: manager, admin)
+- POST /api/tasks/ — Create task (authorize: manager, admin). Accepts optional `dependencies` array of existing task IDs.
 - PUT /api/tasks/:id — Update task
 - PATCH /api/tasks/:id/status — Update task status
 - PATCH /api/tasks/:id/checklist — Update checklist
 - DELETE /api/tasks/:id — Delete task
 - POST /api/tasks/:id/comments — Add comment to task
+- POST /api/tasks/:id/dependencies — Add a dependency ("blocked by"); body `{ dependencyId }` (authorize: manager, admin). Rejects self-dependencies, duplicates, and cycles.
+- DELETE /api/tasks/:id/dependencies/:dependencyId — Remove a dependency (authorize: manager, admin)
+- GET /api/tasks/:id/dependents — List tasks that depend on this one (downstream)
+
+Notes:
+- `GET /api/tasks/` and `GET /api/tasks/:id` responses now include `isBlocked` (true while any dependency is not `done`; single-task response also includes `blockingTasks` and a populated `dependencies` list).
+- A task cannot move to `in-progress` or `done` while blocked — the API returns 400 with the blocking tasks listed.
+- Completing a task notifies (in-app + WebSocket `notification:new`) the assignees of every dependent that becomes fully unblocked (`type: 'task_unblocked'`).
+- Deleting a task removes it from all dependents' dependency lists.
 
 **Projects** (`/api/projects`) — protected
 - GET /api/projects/ — List projects
